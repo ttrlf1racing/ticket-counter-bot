@@ -12,7 +12,7 @@ const client = new Client({
 // 🧩 CATEGORY MAP
 // Format: "CategoryID": "CounterChannelID"
 const CATEGORY_MAP = {
-  "1427983033343938630": "1427984531822215198", // Example: "130739948475221000": "130739952134908000"
+  "1330176823157587988": "1427990289158639668", // T1 Tickets
   // Add more if needed
 };
 
