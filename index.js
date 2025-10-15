@@ -12,7 +12,7 @@ const client = new Client({
 // 🧩 CATEGORY MAP
 // categoryId : displayChannelId
 const CATEGORY_MAP = {
-  "123456789012345678": "234567890123456789", // Support Tickets
+  "1427983033343938630": "1427984531822215198", // Support Tickets
   "345678901234567890": "456789012345678901", // Bug Reports
   "567890123456789012": "678901234567890123", // Suggestions
 };
