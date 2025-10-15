@@ -12,8 +12,11 @@ const client = new Client({
 // 🧩 CATEGORY MAP
 // Format: "CategoryID": "CounterChannelID"
 const CATEGORY_MAP = {
-  "1330176823157587988": "1427990289158639668", // T1 Tickets
-  // Add more if needed
+  "1330176823157587988": "1427990289158639668", // T1
+  "1397564599653371945": "1427992666154733639", // T2
+  "1378660136813596772": "1427993025241550971", // T3
+  "1402961050927763618": "1427993294880903299", // T4
+  "1402961328209006672": "1427993548971577404"  // REAL
 };
 
 // 🧮 Count active tickets (ignore closed + counter channel)
@@ -32,15 +35,22 @@ function countTicketsInCategory(guild, categoryId) {
 async function updateCategoryCount(guild, categoryId) {
   const displayChannelId = CATEGORY_MAP[categoryId];
   const displayChannel = guild.channels.cache.get(displayChannelId);
-  if (!displayChannel) return;
+  const category = guild.channels.cache.get(categoryId);
+  if (!displayChannel || !category) return;
 
   const count = countTicketsInCategory(guild, categoryId);
-  const newName = `tickets: ${count}`;
 
-  // Avoid extra API calls
+  // 🏷️ Use the category name (cleaned and formatted)
+  const cleanCategoryName = category.name
+    .toLowerCase()
+    .replace(/\s+/g, "-")        // replace spaces with hyphens
+    .replace(/[^a-z0-9\-]/g, ""); // remove special chars
+
+  const newName = `${cleanCategoryName}: ${count}`;
+
   if (displayChannel.name !== newName) {
     await displayChannel.setName(newName).catch(console.error);
-    console.log(`Updated ${displayChannel.name} → ${count} active tickets`);
+    console.log(`Updated ${displayChannel.name} → ${newName}`);
   }
 }
 
@@ -58,14 +68,6 @@ client.once("clientReady", async () => {
     await updateAllCounts(guild);
   }
   console.log("🔄 Ticket counter is active and listening for changes...");
-
-  // Optional: send a confirmation message in each counter channel
-  for (const categoryId of Object.keys(CATEGORY_MAP)) {
-    const displayChannel = client.channels.cache.get(CATEGORY_MAP[categoryId]);
-    if (displayChannel) {
-      await displayChannel.send("✅ Ticket counter online and tracking!").catch(() => {});
-    }
-  }
 });
 
 // 📥 Channel created
