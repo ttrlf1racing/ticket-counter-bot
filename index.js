@@ -4,20 +4,20 @@ const { Client, GatewayIntentBits, ChannelType } = require("discord.js");
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages
   ],
 });
 
 // 🧩 CATEGORY MAP
-// categoryId : displayChannelId
+// Format: "CategoryID": "CounterChannelID"
 const CATEGORY_MAP = {
-  "1427983033343938630": "1427984531822215198", // Support Tickets
-  "345678901234567890": "456789012345678901", // Bug Reports
-  "567890123456789012": "678901234567890123", // Suggestions
+  "YOUR_CATEGORY_ID": "YOUR_COUNTER_CHANNEL_ID", // Example: "130739948475221000": "130739952134908000"
+  // Add more if needed:
+  // "ANOTHER_CATEGORY_ID": "ANOTHER_COUNTER_CHANNEL_ID"
 };
 
-// 🧮 Count active (non-closed) ticket channels in a category
+// 🧮 Count active tickets in one category
 function countTicketsInCategory(guild, categoryId) {
   return guild.channels.cache.filter(ch =>
     ch.parentId === categoryId &&
@@ -36,46 +36,46 @@ async function updateCategoryCount(guild, categoryId) {
   const count = countTicketsInCategory(guild, categoryId);
   const newName = `tickets: ${count}`;
 
-  // Only rename if it actually changed (avoid rate limits)
+  // Avoid renaming if already correct (reduces API calls)
   if (displayChannel.name !== newName) {
     await displayChannel.setName(newName).catch(console.error);
     console.log(`Updated ${displayChannel.name} → ${count} active tickets`);
   }
 }
 
-// 🔄 Update all categories at once
+// 🔄 Update all categories
 async function updateAllCounts(guild) {
   for (const categoryId of Object.keys(CATEGORY_MAP)) {
     await updateCategoryCount(guild, categoryId);
   }
 }
 
-// 🟢 Bot ready
+// 🟢 When bot starts up
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   for (const [, guild] of client.guilds.cache) {
     await updateAllCounts(guild);
   }
+  console.log("🔄 Ticket counter is active and listening for changes...");
 });
 
-// 📥 When a channel is created
+// 🧱 Channel created
 client.on("channelCreate", async channel => {
   if (CATEGORY_MAP[channel.parentId]) {
     await updateCategoryCount(channel.guild, channel.parentId);
   }
 });
 
-// 🗑️ When a channel is deleted
+// 🗑️ Channel deleted
 client.on("channelDelete", async channel => {
   if (CATEGORY_MAP[channel.parentId]) {
     await updateCategoryCount(channel.guild, channel.parentId);
   }
 });
 
-// 📝 When a ticket is renamed (e.g., active → closed)
+// ✏️ Channel renamed (e.g. ticket closed)
 client.on("channelUpdate", async (oldChannel, newChannel) => {
   if (CATEGORY_MAP[oldChannel.parentId]) {
-    // If name changed and it’s a ticket channel, refresh
     if (oldChannel.name !== newChannel.name) {
       await updateCategoryCount(newChannel.guild, oldChannel.parentId);
     }
