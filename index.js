@@ -13,15 +13,16 @@ const client = new Client({
 // Format: "CategoryID": "CounterChannelID"
 const CATEGORY_MAP = {
   "1427983033343938630": "1427984531822215198", // Example: "130739948475221000": "130739952134908000"
-  // Add more if needed:
-  // "ANOTHER_CATEGORY_ID": "ANOTHER_COUNTER_CHANNEL_ID"
+  // Add more if needed
 };
 
-// 🧮 Count active tickets in one category
+// 🧮 Count active tickets (ignore closed + counter channel)
 function countTicketsInCategory(guild, categoryId) {
+  const displayChannelId = CATEGORY_MAP[categoryId];
   return guild.channels.cache.filter(ch =>
     ch.parentId === categoryId &&
     ch.type === ChannelType.GuildText &&
+    ch.id !== displayChannelId && // ignore counter channel itself
     !ch.name.startsWith("closed") &&
     !ch.name.startsWith("resolved")
   ).size;
@@ -36,7 +37,7 @@ async function updateCategoryCount(guild, categoryId) {
   const count = countTicketsInCategory(guild, categoryId);
   const newName = `tickets: ${count}`;
 
-  // Avoid renaming if already correct (reduces API calls)
+  // Avoid extra API calls
   if (displayChannel.name !== newName) {
     await displayChannel.setName(newName).catch(console.error);
     console.log(`Updated ${displayChannel.name} → ${count} active tickets`);
@@ -51,15 +52,23 @@ async function updateAllCounts(guild) {
 }
 
 // 🟢 When bot starts up
-client.once("ready", async () => {
+client.once("clientReady", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   for (const [, guild] of client.guilds.cache) {
     await updateAllCounts(guild);
   }
   console.log("🔄 Ticket counter is active and listening for changes...");
+
+  // Optional: send a confirmation message in each counter channel
+  for (const categoryId of Object.keys(CATEGORY_MAP)) {
+    const displayChannel = client.channels.cache.get(CATEGORY_MAP[categoryId]);
+    if (displayChannel) {
+      await displayChannel.send("✅ Ticket counter online and tracking!").catch(() => {});
+    }
+  }
 });
 
-// 🧱 Channel created
+// 📥 Channel created
 client.on("channelCreate", async channel => {
   if (CATEGORY_MAP[channel.parentId]) {
     await updateCategoryCount(channel.guild, channel.parentId);
