@@ -35,12 +35,23 @@ function countTicketsInCategory(guild, categoryId) {
 async function updateCategoryCount(guild, categoryId) {
   const displayChannelId = CATEGORY_MAP[categoryId];
   const displayChannel = guild.channels.cache.get(displayChannelId);
-  const category = guild.channels.cache.get(categoryId);
+  let category = guild.channels.cache.get(categoryId);
+
+  // ⏳ If not cached yet, fetch it
+  if (!category) {
+    try {
+      category = await guild.channels.fetch(categoryId);
+    } catch (err) {
+      console.error(`⚠️ Could not fetch category ${categoryId}:`, err.message);
+      return;
+    }
+  }
+
   if (!displayChannel || !category) return;
 
   const count = countTicketsInCategory(guild, categoryId);
 
-  // 🏷️ Use the category name (cleaned and formatted)
+  // 🏷️ Use the category name (formatted)
   const cleanCategoryName = category.name
     .toLowerCase()
     .replace(/\s+/g, "-")        // replace spaces with hyphens
@@ -50,7 +61,7 @@ async function updateCategoryCount(guild, categoryId) {
 
   if (displayChannel.name !== newName) {
     await displayChannel.setName(newName).catch(console.error);
-    console.log(`Updated ${displayChannel.name} → ${newName}`);
+    console.log(`✅ Updated ${displayChannel.name} → ${newName}`);
   }
 }
 
@@ -64,10 +75,21 @@ async function updateAllCounts(guild) {
 // 🟢 When bot starts up
 client.once("clientReady", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
+
+  // Run initial sync for all servers
   for (const [, guild] of client.guilds.cache) {
     await updateAllCounts(guild);
   }
+
   console.log("🔄 Ticket counter is active and listening for changes...");
+
+  // ⏱️ Auto-refresh every 10 minutes (failsafe)
+  setInterval(async () => {
+    console.log("⏰ Auto-refreshing all ticket counters...");
+    for (const [, guild] of client.guilds.cache) {
+      await updateAllCounts(guild);
+    }
+  }, 10 * 60 * 1000); // 10 minutes
 });
 
 // 📥 Channel created
