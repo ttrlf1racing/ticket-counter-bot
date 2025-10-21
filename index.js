@@ -16,7 +16,7 @@ const CATEGORY_MAP = {
   "1397564599653371945": "1427992666154733639", // T2
   "1378660136813596772": "1427993025241550971", // T3
   "1402961050927763618": "1427993294880903299", // T4
-  "1402961328209006672": "1430155833127469227"  // REAL
+  "1402961328209006672": "1427993548971577404"  // REALISTIC
 };
 
 // 🧮 Count active tickets (ignore closed + counter channel)
@@ -31,13 +31,13 @@ function countTicketsInCategory(guild, categoryId) {
   ).size;
 }
 
-// 🔁 Update a single category’s counter channel
+// 🔁 Update a single category’s counter (supports voice or text channels)
 async function updateCategoryCount(guild, categoryId) {
   const displayChannelId = CATEGORY_MAP[categoryId];
   const displayChannel = guild.channels.cache.get(displayChannelId);
   let category = guild.channels.cache.get(categoryId);
 
-  // ⏳ If not cached yet, fetch it
+  // ⏳ If not cached, fetch from API
   if (!category) {
     try {
       category = await guild.channels.fetch(categoryId);
@@ -51,17 +51,27 @@ async function updateCategoryCount(guild, categoryId) {
 
   const count = countTicketsInCategory(guild, categoryId);
 
-  // 🏷️ Use the category name (formatted)
-  const cleanCategoryName = category.name
-    .toLowerCase()
-    .replace(/\s+/g, "-")        // replace spaces with hyphens
-    .replace(/[^a-z0-9\-]/g, ""); // remove special chars
+  // 🏷️ Preserve your current prefix (everything before ":")
+  const currentName = displayChannel.name;
+  const baseName = currentName.includes(":")
+    ? currentName.split(":")[0].trim()
+    : currentName.trim();
 
-  const newName = `${cleanCategoryName}: ${count}`;
+  const newName = `${baseName}: ${count}`;
 
-  if (displayChannel.name !== newName) {
+  // ✅ Only rename if the count changed
+  if (currentName !== newName) {
     await displayChannel.setName(newName).catch(console.error);
-    console.log(`✅ Updated ${displayChannel.name} → ${newName}`);
+    console.log(`✅ Updated ${baseName} → ${newName}`);
+  }
+
+  // 🆙 Optional: keep the counter channel at top (for text channels only)
+  if (displayChannel.type === ChannelType.GuildText) {
+    try {
+      await displayChannel.setPosition(0);
+    } catch (err) {
+      console.warn(`⚠️ Couldn't move ${displayChannel.name} to top:`, err.message);
+    }
   }
 }
 
@@ -72,24 +82,23 @@ async function updateAllCounts(guild) {
   }
 }
 
-// 🟢 When bot starts up
+// 🟢 When bot starts
 client.once("clientReady", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
-  // Run initial sync for all servers
   for (const [, guild] of client.guilds.cache) {
     await updateAllCounts(guild);
   }
 
   console.log("🔄 Ticket counter is active and listening for changes...");
 
-  // ⏱️ Auto-refresh every 10 minutes (failsafe)
+  // ⏱️ Auto-refresh every 10 minutes
   setInterval(async () => {
-    console.log("⏰ Auto-refreshing all ticket counters...");
+    console.log("⏰ Auto-refreshing ticket counters...");
     for (const [, guild] of client.guilds.cache) {
       await updateAllCounts(guild);
     }
-  }, 10 * 60 * 1000); // 10 minutes
+  }, 10 * 60 * 1000);
 });
 
 // 📥 Channel created
@@ -106,7 +115,7 @@ client.on("channelDelete", async channel => {
   }
 });
 
-// ✏️ Channel renamed (e.g. ticket closed)
+// ✏️ Channel renamed (e.g. closed/resolved ticket)
 client.on("channelUpdate", async (oldChannel, newChannel) => {
   if (CATEGORY_MAP[oldChannel.parentId]) {
     if (oldChannel.name !== newChannel.name) {
