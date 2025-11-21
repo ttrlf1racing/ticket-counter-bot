@@ -11,6 +11,7 @@ const client = new Client({
 
 // 🧩 CATEGORY MAP
 // Format: "CategoryID": "CounterChannelID"
+// ⚠️ These IDs must belong to THE SAME GUILD the bot is running in
 const CATEGORY_MAP = {
   "1330176823157587988": "1430160855982673930", // T1
   "1397564599653371945": "1430160780463968277", // T2
@@ -28,12 +29,12 @@ function isTicketChannel(channel) {
 
   // 👉 EDIT THIS to match your actual ticket naming scheme
   // Examples:
-  //  - "ticket-001"
-  //  - "cup-001"
-  //  - "t1-ticket-1"
+  //   ticket-001
+  //   t1-ticket-01
+  //   cup-001
   if (
     name.startsWith("ticket-") || // generic tickets
-    name.startsWith("cup-")       // cup tickets (if you use this style)
+    name.startsWith("cup-")       // cup tickets (if you use this)
   ) {
     return true;
   }
@@ -48,30 +49,25 @@ function countTicketsInCategory(guild, categoryId) {
   return guild.channels.cache.filter(ch =>
     ch.parentId === categoryId &&
     ch.type === ChannelType.GuildText &&
-    ch.id !== displayChannelId &&         // ignore counter channel itself
-    isTicketChannel(ch) &&                // ✅ only ticket channels
+    ch.id !== displayChannelId && // ignore counter channel itself
+    isTicketChannel(ch) &&        // ✅ only ticket channels
     !ch.name.toLowerCase().startsWith("closed") &&
     !ch.name.toLowerCase().startsWith("resolved")
   ).size;
 }
 
-// 🔁 Update a single category’s counter (supports voice or text channels)
+// 🔁 Update a single category’s counter
 async function updateCategoryCount(guild, categoryId) {
   const displayChannelId = CATEGORY_MAP[categoryId];
+
+  // Only use cached channels; avoids cross-guild fetch errors
   const displayChannel = guild.channels.cache.get(displayChannelId);
-  let category = guild.channels.cache.get(categoryId);
+  const category = guild.channels.cache.get(categoryId);
 
-  // ⏳ If not cached, fetch from API
-  if (!category) {
-    try {
-      category = await guild.channels.fetch(categoryId);
-    } catch (err) {
-      console.error(`⚠️ Could not fetch category ${categoryId}:`, err.message);
-      return;
-    }
+  if (!displayChannel || !category) {
+    // Silently ignore if this guild doesn't have that category/counter
+    return;
   }
-
-  if (!displayChannel || !category) return;
 
   const count = countTicketsInCategory(guild, categoryId);
 
@@ -93,7 +89,7 @@ async function updateCategoryCount(guild, categoryId) {
     }
   }
 
-  // 🆙 Optional: keep the counter channel at top (for text channels only)
+  // 🆙 Optional: keep the counter channel at the top of the category
   if (displayChannel.type === ChannelType.GuildText) {
     try {
       await displayChannel.setPosition(0);
@@ -103,15 +99,17 @@ async function updateCategoryCount(guild, categoryId) {
   }
 }
 
-// 🔄 Update all categories
+// 🔄 Update all categories for this guild
 async function updateAllCounts(guild) {
   for (const categoryId of Object.keys(CATEGORY_MAP)) {
+    // 👇 Only try to update categories that actually exist in this guild
+    if (!guild.channels.cache.has(categoryId)) continue;
     await updateCategoryCount(guild, categoryId);
   }
 }
 
 // 🟢 When bot starts
-client.once("ready", async () => {
+client.once("clientReady", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
   for (const [, guild] of client.guilds.cache) {
@@ -132,16 +130,24 @@ client.once("ready", async () => {
 // 📥 Channel created
 client.on("channelCreate", async channel => {
   if (!channel.guild) return;
-  if (CATEGORY_MAP[channel.parentId]) {
-    await updateCategoryCount(channel.guild, channel.parentId);
+
+  const parentId = channel.parentId;
+  if (!parentId) return;
+
+  if (CATEGORY_MAP[parentId]) {
+    await updateCategoryCount(channel.guild, parentId);
   }
 });
 
 // 🗑️ Channel deleted
 client.on("channelDelete", async channel => {
   if (!channel.guild) return;
-  if (CATEGORY_MAP[channel.parentId]) {
-    await updateCategoryCount(channel.guild, channel.parentId);
+
+  const parentId = channel.parentId;
+  if (!parentId) return;
+
+  if (CATEGORY_MAP[parentId]) {
+    await updateCategoryCount(channel.guild, parentId);
   }
 });
 
@@ -149,12 +155,11 @@ client.on("channelDelete", async channel => {
 client.on("channelUpdate", async (oldChannel, newChannel) => {
   if (!newChannel.guild) return;
 
-  // parent category didn't change
   const parentId = oldChannel.parentId || newChannel.parentId;
-  if (CATEGORY_MAP[parentId]) {
-    if (oldChannel.name !== newChannel.name) {
-      await updateCategoryCount(newChannel.guild, parentId);
-    }
+  if (!parentId) return;
+
+  if (CATEGORY_MAP[parentId] && oldChannel.name !== newChannel.name) {
+    await updateCategoryCount(newChannel.guild, parentId);
   }
 });
 
